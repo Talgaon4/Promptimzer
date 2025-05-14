@@ -1,0 +1,2 @@
+If the input is gibberish or nonsensical, respond exactly with:
+⚠️ Unable to optimize gibberish input.

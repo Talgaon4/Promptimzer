@@ -1,100 +1,107 @@
 // File: background.js
 
+// Cache for loaded prompt templates
+const PROMPTS = {};
+const PROMPT_FILES = ['classifier', 'gibberish', 'casual', 'simple', 'complex', 'agent'];
+
+async function loadAllPrompts() {
+  // if already loaded, skip
+  if (PROMPTS.classifier) return;
+  await Promise.all(
+    PROMPT_FILES.map(async name => {
+      const url = chrome.runtime.getURL(`prompts/${name}.txt`);
+      const text = await fetch(url).then(r => {
+        if (!r.ok) throw new Error(`Failed to load ${name}.txt`);
+        return r.text();
+      });
+      PROMPTS[name] = text.trim();
+    })
+  );
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action !== 'optimize') return;
 
-  chrome.storage.local.get('openaiKey', async ({ openaiKey }) => {
-    if (!openaiKey) {
-      sendResponse({ error: 'No OpenAI API key set in storage.' });
-      return;
-    }
+  chrome.storage.local.get(
+    ['openaiKey', 'model', 'temperature', 'maxTokens'],
+    ({ openaiKey, model: defaultModel, temperature: defaultTemp, maxTokens }) => {
 
-    try {
-      const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openaiKey}`
-        },
-        body: JSON.stringify({
-          model: msg.model,
-          messages: [
-            {
-              role: 'system',
-              content: `
-You are a prompt-optimization assistant for conversational LLMs. Your job is to take casual, typo-ridden, or unclear user prompts and rewrite them to be:
+      if (!openaiKey) {
+        sendResponse({ error: 'No OpenAI API key set in storage.' });
+        return;
+      }
 
-• Clear and concise  
-• Grammatically correct  
-• Preserving the original intent and tone (e.g. casual remains casual)  
-• Structured to get the best possible answer from an LLM  
+      // ensure prompts are loaded
+      (async () => {
+        try {
+          await loadAllPrompts();
 
-Here are some examples:
+          const model = msg.model || defaultModel || 'gpt-3.5-turbo';
+          const temperature = msg.temperature != null
+            ? msg.temperature
+            : (defaultTemp != null ? defaultTemp : 0.7);
+          const tokenLimit = maxTokens || 300;
 
-Example 1  
-• User’s original: “tell me what is the weather like now”  
-• Optimized: “What’s the current weather forecast in my location?”
-
-Example 2  
-• User’s original: “i need help with my resume grammar and style”  
-• Optimized: “Please review my resume and improve its grammar and style.”
-
-Example 3  
-• User’s original: “whats the best way to learn js quickly?”  
-• Optimized: “What are the most effective strategies and resources for learning JavaScript quickly?”
-
-Now, given the user’s prompt below, output *only* the optimized version:
-`
+          // 1) Classification call
+          const clsRes = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${openaiKey}`
             },
-            {
-              role: 'user',
-              content: msg.prompt
-            }
-          ],
-          temperature: msg.temperature,
-          max_tokens: 300
-        })
-      });
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: PROMPTS.classifier },
+                { role: 'user', content: msg.prompt }
+              ],
+              temperature: 0.0,
+              max_tokens: 10
+            })
+          });
+          if (!clsRes.ok) throw new Error(`Classifier API error ${clsRes.status}`);
+          const clsData = await clsRes.json();
+          const category = (clsData.choices[0]?.message?.content || '').trim().toLowerCase();
 
-      if (!apiRes.ok) {
-        const errorData = await apiRes.json().catch(() => ({}));
-        let errorMessage;
+          // pick appropriate system prompt
+          const systemPrompt = PROMPTS[category] || PROMPTS.simple;
 
-        if (errorData.error?.message?.includes('API key')) {
-          errorMessage = errorData.error.message;
-        } else if (apiRes.status === 401) {
-          errorMessage = 'Invalid API key or authentication error.';
-        } else {
-          errorMessage = errorData.error?.message || `API returned status ${apiRes.status}`;
+          // 2) Optimization call
+          const optRes = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${openaiKey}`
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: msg.prompt }
+              ],
+              temperature,
+              max_tokens: tokenLimit
+            })
+          });
+          if (!optRes.ok) throw new Error(`Optimizer API error ${optRes.status}`);
+          const optData = await optRes.json();
+          const optimized = optData.choices[0]?.message?.content?.trim();
+
+          if (!optimized) {
+            sendResponse({ error: 'Empty response from optimizer.' });
+          } else {
+            sendResponse({ optimized });
+          }
+
+        } catch (err) {
+          console.error('Prompt Refiner background error:', err);
+          sendResponse({ error: err.message || 'Unknown background error' });
         }
+      })();
 
-        console.error('OpenAI API error:', errorData);
-        sendResponse({ error: errorMessage });
-        return;
-      }
-
-      const data = await apiRes.json();
-
-      if (!data.choices || !data.choices.length) {
-        sendResponse({ error: 'No choices returned from API' });
-        return;
-      }
-
-      const optimized = data.choices[0]?.message?.content?.trim();
-
-      if (!optimized) {
-        sendResponse({ error: 'Empty response from API' });
-        return;
-      }
-
-      sendResponse({ optimized });
-
-    } catch (err) {
-      console.error('Prompt Refiner background error', err);
-      sendResponse({ error: err.message || 'Unknown error in background script' });
     }
-  });
+  );
 
-  // Indicate that we'll respond asynchronously
+  // indicate we’ll call sendResponse asynchronously
   return true;
 });

@@ -1,0 +1,15 @@
+Classify the user's prompt into exactly one category: GIBBERISH, CASUAL, SIMPLE, COMPLEX, or AGENT. Output only the category name.
+
+Guidelines:
+- GIBBERISH: Nonsensical text, random characters
+- CASUAL: Informal requests with simple language, may have typos
+- SIMPLE: Clear, straightforward instructions with minimal complexity
+- COMPLEX: Multi-part questions, technical vocabulary, detailed requests
+- AGENT: Instructions that define an AI's role, behavior, or multi-step processes
+
+Examples:
+"asdasd123!!!" → GIBBERISH
+"whats the weather" → CASUAL
+"Summarize this text." → SIMPLE
+"List the top-5 pros and cons of renewable energy adoption in urban infrastructure." → COMPLEX
+"You are an AI assistant. On each customer query, do X, then Y, then Z." → AGENT
