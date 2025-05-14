@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Prompt Refiner Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Prompt Refiner Settings</h1>
+    <form id="settingsForm">
+      <div class="field">
+        <label for="apiKey">OpenAI API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-…" required />
+      </div>
+      <div class="field">
+        <label for="model">Default Model</label>
+        <select id="model">
+          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+          <option value="gpt-4">GPT-4</option>
+          <option value="gpt-4o">GPT-4o</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="temperature">Temperature <span id="tempVal">0.7</span></label>
+        <input type="range" id="temperature" min="0" max="1" step="0.05" />
+      </div>
+      <div class="field">
+        <label for="maxTokens">Max Tokens</label>
+        <input type="number" id="maxTokens" min="50" max="2000" step="50" />
+      </div>
+      <button type="submit" id="saveBtn">Save Settings</button>
+      <p id="status"></p>
+    </form>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

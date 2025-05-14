@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Prompt Refiner",
+  "description": "Add an “Optimize Prompt” button to LLM web UIs (ChatGPT, Gemini, Claude).",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://chat.openai.com/*",
+    "*://gemini.google.com/*",
+    "*://*.claude.ai/*",
+    "https://api.openai.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://chat.openai.com/*",
+        "*://gemini.google.com/*",
+        "*://*.claude.ai/*"
+      ],
+      "js": ["content_script.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Prompt Refiner"
+  }
+}
