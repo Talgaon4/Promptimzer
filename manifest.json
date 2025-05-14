@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Prompt Refiner",
-  "description": "Add an “Optimize Prompt” button to LLM web UIs (ChatGPT, Gemini, Claude).",
+  "name": "Promptimizer",
+  "description": "A Chrome extension that adds prompt optimization to LLM chat interfaces.",
   "version": "1.0.0",
   "permissions": [
     "storage",
@@ -33,6 +33,6 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Prompt Refiner"
+    "default_title": "Promptimizer"
   }
 }
