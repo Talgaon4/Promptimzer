@@ -270,9 +270,13 @@ function addOptimizeButtons() {
             if ("value" in el) el.value = response.optimized;
             else el.innerText = response.optimized;
 
+            btn.classList.remove("loading");
+            btn.disabled = false;
             btn.textContent = "Optimized!";
-            setTimeout(() => (btn.textContent = "Optimize Prompt"), 1500);
-            updateState();
+            setTimeout(() => {
+              btn.textContent = "Optimize Prompt";
+              updateState();
+            }, 1500);
           }
         );
       });
