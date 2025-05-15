@@ -32,7 +32,25 @@ function injectStyles() {
 function getCandidates() {
   return [
     ...document.querySelectorAll('textarea, [contenteditable="true"]'),
-  ].filter((el) => el.offsetParent && !el.dataset.hasPromptRefiner);
+  ].filter((el) => {
+    if (!el.offsetParent || el.dataset.hasPromptRefiner) return false;
+
+    // Exclude elements likely to be code editors or canvas
+    const container = el.closest(
+      '[class*="canvas"], [class*="code"], pre, code'
+    );
+    const isLikelyCodeEditor = container !== null;
+
+    // Optionally check for aria-labels or placeholders to identify prompt areas
+    const promptLike =
+      el.getAttribute("aria-label")?.toLowerCase().includes("prompt") ||
+      el.getAttribute("placeholder")?.toLowerCase().includes("ask");
+
+    return (
+      !isLikelyCodeEditor &&
+      (el.tagName === "TEXTAREA" || promptLike || el.isContentEditable)
+    );
+  });
 }
 
 function getSiteConfig(cb) {
