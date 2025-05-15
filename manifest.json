@@ -3,15 +3,13 @@
   "name": "Promptimizer",
   "description": "A Chrome extension that adds prompt optimization to LLM chat interfaces.",
   "version": "1.0.0",
-  "permissions": [
-    "storage",
-    "activeTab"
-  ],
+  "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "*://chat.openai.com/*",
     "*://gemini.google.com/*",
+    "*://chatgpt.com/*",
     "*://*.claude.ai/*",
-    "https://api.openai.com/*"
+    "*://api.openai.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -21,6 +19,7 @@
       "matches": [
         "*://chat.openai.com/*",
         "*://gemini.google.com/*",
+        "*://chatgpt.com/*",
         "*://*.claude.ai/*"
       ],
       "js": ["content_script.js"],
