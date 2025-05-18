@@ -1,107 +1,124 @@
 // File: background.js
 
+// Constants for models and parameters
+const DEFAULT_MODEL = 'gpt-3.5-turbo';
+const TEMPERATURE   = 0.2;
+const DEFAULT_MAX_TOKENS = 300;
+
 // Cache for loaded prompt templates
 const PROMPTS = {};
-const PROMPT_FILES = ['classifier', 'gibberish', 'casual', 'simple', 'complex', 'agent'];
+const PROMPT_FILES = [
+  'classifier',
+  'nonsense',
+  'simple',
+  'complex',
+];
 
-async function loadAllPrompts() {
-  // if already loaded, skip
-  if (PROMPTS.classifier) return;
-  await Promise.all(
-    PROMPT_FILES.map(async name => {
-      const url = chrome.runtime.getURL(`prompts/${name}.txt`);
-      const text = await fetch(url).then(r => {
-        if (!r.ok) throw new Error(`Failed to load ${name}.txt`);
-        return r.text();
-      });
-      PROMPTS[name] = text.trim();
-    })
-  );
+// Lazy-load a prompt file by name
+async function loadPrompt(name) {
+  if (PROMPTS[name]) return PROMPTS[name];
+  if (!PROMPT_FILES.includes(name)) throw new Error(`Unknown prompt category: ${name}`);
+  const url = chrome.runtime.getURL(`prompts/${name}.txt`);
+  const text = await fetch(url).then(r => {
+    if (!r.ok) throw new Error(`Failed to load ${name}.txt`);
+    return r.text();
+  });
+  PROMPTS[name] = text.trim();
+  return PROMPTS[name];
 }
 
+// Classify raw prompt into categories
+async function classifyPrompt(rawPrompt, apiKey) {
+  const classifierPrompt = await loadPrompt('classifier');
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      messages: [
+        { role: 'system', content: classifierPrompt },
+        { role: 'user', content: rawPrompt }
+      ],
+      temperature: 0.0,
+      max_tokens: 10
+    })
+  });
+
+  if (!res.ok) throw new Error(`Classifier API error ${res.status}`);
+  const data = await res.json();
+  return (data.choices[0]?.message?.content || '').trim().toLowerCase();
+}
+
+// Optimize prompt based on its category
+async function optimizePrompt(rawPrompt, category, apiKey, maxTokens) {
+  const useModel = DEFAULT_MODEL;
+  const systemPrompt = await loadPrompt(category).catch(() => loadPrompt('simple'));
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: useModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: rawPrompt }
+      ],
+      temperature: TEMPERATURE,
+      max_tokens: maxTokens
+    })
+  });
+
+  if (!res.ok) throw new Error(`Optimizer API error ${res.status}`);
+  const data = await res.json();
+  const optimized = data.choices[0]?.message?.content?.trim();
+
+  if (!optimized) throw new Error('Empty response from optimizer.');
+  return optimized;
+}
+
+// Main listener
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action !== 'optimize') return;
 
-  chrome.storage.local.get(
-    ['openaiKey', 'model', 'temperature', 'maxTokens'],
-    ({ openaiKey, model: defaultModel, temperature: defaultTemp, maxTokens }) => {
+  // Fetch API key and optional user setting for max tokens
+  chrome.storage.local.get(['openaiKey', 'maxTokens'], async ({ openaiKey, maxTokens }) => {
+    if (!openaiKey) {
+      sendResponse({ error: 'No OpenAI API key set in storage.' });
+      return;
+    }
 
-      if (!openaiKey) {
-        sendResponse({ error: 'No OpenAI API key set in storage.' });
+    // Determine effective max tokens (use user preference if set, else default)
+    const effectiveMaxTokens = (typeof maxTokens === 'number' && maxTokens > 0)
+      ? maxTokens
+      : DEFAULT_MAX_TOKENS;
+
+    try {
+      // 1) Classification
+      const category = await classifyPrompt(msg.prompt, openaiKey);
+      console.log(`Prompt classified as: ${category}`);
+
+      // If nonsense, return early and instruct content script to show inline warning
+      if (category === 'nonsense') {
+        sendResponse({ optimized: msg.prompt, category, showWarning: true });
         return;
       }
 
-      // ensure prompts are loaded
-      (async () => {
-        try {
-          await loadAllPrompts();
+      // 2) Optimization with user-controlled maxTokens
+      const optimized = await optimizePrompt(msg.prompt, category, openaiKey, effectiveMaxTokens);
+      console.log(`Optimized with model: ${DEFAULT_MODEL}, maxTokens: ${effectiveMaxTokens}`);
 
-          const model = msg.model || defaultModel || 'gpt-3.5-turbo';
-          const temperature = msg.temperature != null
-            ? msg.temperature
-            : (defaultTemp != null ? defaultTemp : 0.7);
-          const tokenLimit = maxTokens || 300;
-
-          // 1) Classification call
-          const clsRes = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${openaiKey}`
-            },
-            body: JSON.stringify({
-              model,
-              messages: [
-                { role: 'system', content: PROMPTS.classifier },
-                { role: 'user', content: msg.prompt }
-              ],
-              temperature: 0.0,
-              max_tokens: 10
-            })
-          });
-          if (!clsRes.ok) throw new Error(`Classifier API error ${clsRes.status}`);
-          const clsData = await clsRes.json();
-          const category = (clsData.choices[0]?.message?.content || '').trim().toLowerCase();
-
-          // pick appropriate system prompt
-          const systemPrompt = PROMPTS[category] || PROMPTS.simple;
-
-          // 2) Optimization call
-          const optRes = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${openaiKey}`
-            },
-            body: JSON.stringify({
-              model,
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: msg.prompt }
-              ],
-              temperature,
-              max_tokens: tokenLimit
-            })
-          });
-          if (!optRes.ok) throw new Error(`Optimizer API error ${optRes.status}`);
-          const optData = await optRes.json();
-          const optimized = optData.choices[0]?.message?.content?.trim();
-
-          if (!optimized) {
-            sendResponse({ error: 'Empty response from optimizer.' });
-          } else {
-            sendResponse({ optimized });
-          }
-
-        } catch (err) {
-          console.error('Prompt Refiner background error:', err);
-          sendResponse({ error: err.message || 'Unknown background error' });
-        }
-      })();
-
+      sendResponse({ optimized, category });
+    } catch (err) {
+      console.error('Background error:', err);
+      sendResponse({ error: err.message || 'Unknown background error' });
     }
-  );
+  });
 
-  // indicate we’ll call sendResponse asynchronously
-  return true;
+  return true; // Keep the message channel open
 });
