@@ -32,6 +32,7 @@
     "open_in_tab": true
   },
   "action": {
+    "default_popup": "popup.html",
     "default_title": "Promptimizer"
   }
 }

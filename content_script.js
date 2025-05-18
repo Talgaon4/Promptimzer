@@ -1,3 +1,4 @@
+//content_script.js
 const BUTTON_CLASS = "promptimizer-btn";
 
 function injectStyles() {
@@ -169,6 +170,8 @@ function hideModal() {
 }
 
 function addOptimizeButtons() {
+  console.log("addOptimizeButtons called");
+
   injectStyles();
 
   const candidates = getCandidates();
