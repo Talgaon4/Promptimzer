@@ -242,8 +242,15 @@ function addOptimizeButtons() {
             if (response.error) {
               console.error("⚠️ Refiner error:", response.error);
 
+              // Special handling for rate limit errors
+              if (response.isRateLimited) {
+                alert(
+                  "Rate limit reached: " + response.error + 
+                  "\n\nThis helps protect your OpenAI API credits from being used too quickly."
+                );
+              }
               // Check if the error is related to API key issues
-              if (
+              else if (
                 response.error.includes("API key") ||
                 response.error.includes("authentication") ||
                 response.error.includes("401")
