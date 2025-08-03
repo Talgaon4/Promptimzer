@@ -76,6 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
             outputContainer.style.display = "block";
             copyIcon.style.display = "flex";
           }
+          
         );
       }
     );

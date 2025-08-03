@@ -1,16 +1,18 @@
 // Elements
 const apiInput = document.getElementById("apiKey");
 const maxTokens = document.getElementById("maxTokens");
+const showCosts = document.getElementById("showCosts");
 const form = document.getElementById("settingsForm");
 const status = document.getElementById("status");
 
 // Load settings
 document.addEventListener("DOMContentLoaded", () => {
   chrome.storage.local.get(
-    ["openaiKey", "maxTokens"],
-    ({ openaiKey, maxTokens: tokens }) => {
+    ["openaiKey", "maxTokens", "showCosts"],
+    ({ openaiKey, maxTokens: tokens, showCosts: costs }) => {
       if (openaiKey) apiInput.value = openaiKey;
       maxTokens.value = tokens || 300;
+      showCosts.checked = costs !== false; // Default to true
     }
   );
 });
@@ -21,6 +23,7 @@ form.addEventListener("submit", (e) => {
   const cfg = {
     openaiKey: apiInput.value.trim(),
     maxTokens: parseInt(maxTokens.value, 10),
+    showCosts: showCosts.checked,
   };
   chrome.storage.local.set(cfg, () => {
     status.textContent = "Settings saved!";

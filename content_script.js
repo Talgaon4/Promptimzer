@@ -6,9 +6,10 @@ function injectStyles() {
   const css = `
     .${BUTTON_CLASS} {
       margin-left: 0px;
-      margin-bottom: 8px;
-      padding: 4px 8px;
-      font-size: 0.9em;
+      margin-bottom: 4px;
+      margin-top: 8px;
+      padding: 3px 5px;
+      font-size: 0.7em;
       background: #2d8cff;
       color: white;
       border: none;
@@ -56,13 +57,14 @@ function getCandidates() {
 
 function getSiteConfig(cb) {
   chrome.storage.local.get(
-    ["openaiKey", "model", "temperature", "maxTokens"],
-    ({ openaiKey, model, temperature, maxTokens }) => {
+    ["openaiKey", "model", "temperature", "maxTokens", "showCosts"],
+    ({openaiKey, model, temperature, maxTokens, showCosts}) => {
       cb({
         hasKey: !!openaiKey,
         model: model || "gpt-3.5-turbo",
         temperature: temperature ?? 0.7,
         maxTokens: maxTokens ?? 300,
+        showCosts: showCosts !== false, // Default to true
       });
     }
   );
@@ -116,7 +118,7 @@ function createApiKeyModal() {
       return;
     }
 
-    chrome.storage.local.set({ openaiKey: apiKey }, () => {
+    chrome.storage.local.set({openaiKey: apiKey}, () => {
       hideModal();
       // Optionally show a success message
       const toast = document.createElement("div");
@@ -245,8 +247,9 @@ function addOptimizeButtons() {
               // Special handling for rate limit errors
               if (response.isRateLimited) {
                 alert(
-                  "Rate limit reached: " + response.error + 
-                  "\n\nThis helps protect your OpenAI API credits from being used too quickly."
+                  "Rate limit reached: " +
+                    response.error +
+                    "\n\nThis helps protect your OpenAI API credits from being used too quickly."
                 );
               }
               // Check if the error is related to API key issues
@@ -279,6 +282,36 @@ function addOptimizeButtons() {
 
             if ("value" in el) el.value = response.optimized;
             else el.innerText = response.optimized;
+            if (response && response.category) {
+              console.log("Prompt category:", response.category); // <-- Add this
+            }
+            // Show cost information
+            if (response.cost && cfg.showCosts) {
+              const cost = response.cost.total;
+              const costMessage = `Cost: $${cost.totalCost.toFixed(4)} (${
+                cost.inputTokens
+              } input + ${cost.outputTokens} output tokens)`;
+
+              // Create a small cost indicator
+              const costIndicator = document.createElement("div");
+              costIndicator.style.cssText = `
+                font-size: 0.75rem;
+                color: #666;
+                margin-top: 4px;
+                font-style: italic;
+              `;
+              costIndicator.textContent = costMessage;
+
+              // Insert after the button
+              btn.parentNode.insertBefore(costIndicator, btn.nextSibling);
+
+              // Remove after 5 seconds
+              setTimeout(() => {
+                if (costIndicator.parentNode) {
+                  costIndicator.remove();
+                }
+              }, 5000);
+            }
 
             btn.classList.remove("loading");
             btn.disabled = false;
@@ -313,5 +346,5 @@ function setupPromptRefinerObserver() {
   new MutationObserver(() => {
     clearTimeout(window.__debouncePromptRefiner);
     window.__debouncePromptRefiner = setTimeout(addOptimizeButtons, 300);
-  }).observe(document.body, { childList: true, subtree: true });
+  }).observe(document.body, {childList: true, subtree: true});
 }
